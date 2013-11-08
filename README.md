@@ -11,3 +11,5 @@ github-backup creates mirrors of all of a user's repositories and all repositori
 ## use a cached token 
 
 github-backup will use the cached token (`-cache cache.json`) when run without the `-token` flag.
+
+    github-backup -cache /path/to/cache/file -to /mirror/base/path
