@@ -30,8 +30,12 @@ DESCRIPTION
 OPTIONS
 	-token TOKEN
 	use TOKEN for the token instead of the value in the token cache file.
+
 	-cache FILE
 	if given a token (-token TOKEN), write its value into FILE. When -token is not used, read the token to use from FILE.
+
+	-to DIR
+	use DIR as the base directory for backups. Defaults to the current directory.
 `
 
 	flag.Parse()
