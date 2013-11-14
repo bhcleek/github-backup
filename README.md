@@ -2,6 +2,12 @@
 
 github-backup creates mirrors of all of a user's repositories and all repositories to which a user has access via team membership in an organization.
 
+# help
+
+documentation for all flags can be seen with 
+
+    github-backup -help
+
 ## first use
 
 [Create an access token](https://help.github.com/articles/creating-an-access-token-for-command-line-use) for GitHub and then run
