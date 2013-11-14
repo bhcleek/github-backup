@@ -20,6 +20,8 @@ var (
 	cacheFile   = flag.String("cache", "", "The access token cache file.")
 	accessToken = flag.String("token", "", "The OAuth access token.")
 	backupDir   = flag.String("to", ".", "The base directory for repository backups.")
+	verbose     = flag.Bool("verbose", false, "Be verbose.")
+	showHelp    = flag.Bool("help", false, "Print usage and exit")
 )
 
 func init() {
@@ -28,6 +30,9 @@ DESCRIPTION
 	Backup GitHub repositories. All access to GitHub will use OAuth tokens. username/password authentication is not supported.
 
 OPTIONS
+	-help
+	Print usage and exit
+
 	-token TOKEN
 	use TOKEN for the token instead of the value in the token cache file.
 
@@ -36,13 +41,20 @@ OPTIONS
 
 	-to DIR
 	use DIR as the base directory for backups. Defaults to the current directory.
+
+	-verbose
+	Be verbose: log results for each repository.
 `
 
 	flag.Parse()
 
+	if *showHelp {
+		fmt.Print(usageMsg)
+		os.Exit(0)
+	}
+
 	if *accessToken == "" && *cacheFile == "" {
 		flag.Usage()
-		fmt.Fprintf(os.Stderr, usageMsg)
 		os.Exit(2)
 	}
 
@@ -77,7 +89,9 @@ func main() {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("Token is cached in %v\n", cache)
+		if *verbose {
+			log.Println("Token is cached in", cache)
+		}
 	} else {
 		token = &oauth.Token{AccessToken: *accessToken}
 
@@ -97,7 +111,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("Retrieving information from GitHub using credentials of", *user.Login)
+	if *verbose {
+		log.Println("Retrieving information from GitHub using credentials of", *user.Login)
+	}
 
 	opt := &github.RepositoryListOptions{Type: "all"}
 	repos, _, err := client.Repositories.List("", opt)
@@ -107,7 +123,9 @@ func main() {
 	}
 
 	if len(repos) == 0 {
-		fmt.Println("no user repositories available.")
+		if *verbose {
+			log.Println("no user repositories available.")
+		}
 	}
 
 	orgs, _, err := client.Organizations.List("", &github.ListOptions{})
@@ -124,7 +142,9 @@ func main() {
 		}
 
 		if len(orgRepos) == 0 {
-			fmt.Println("no", *org.Login, "repositories available")
+			if *verbose {
+				log.Println("no", *org.Login, "repositories available")
+			}
 		} else {
 			repos = append(repos, orgRepos...)
 		}
@@ -148,8 +168,11 @@ func main() {
 		go func(repo github.Repository) {
 			remote, err := url.Parse(*repo.CloneURL)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(*repo.Name, err)
 			} else {
+				if *verbose {
+					log.Println("checking", remote.Path)
+				}
 				mirrorPathSegments := make([]string, 0, 4)
 				mirrorPathSegments = append(mirrorPathSegments, *backupDir)
 				host := strings.Split(remote.Host, ":")[0] // strip off the port portion if it's there.
@@ -158,9 +181,11 @@ func main() {
 				mirrorPath := path.Join(mirrorPathSegments...)
 
 				mirror := backup.NewMirror(mirrorPath)
-				err = mirror.Backup(*remote)
+				err = mirror.Backup(*remote, *verbose)
 				if err != nil {
-					fmt.Println(err)
+					log.Println(remote.Path, err)
+				} else if *verbose {
+					log.Println(remote.Path, "complete")
 				}
 			}
 			wg.Done()
@@ -176,7 +201,9 @@ func main() {
 	for {
 		select {
 		case <-time.After(2 * time.Second):
-			fmt.Printf(".")
+			if !*verbose {
+				os.Stderr.WriteString(".")
+			}
 		case <-done:
 			return
 		}
