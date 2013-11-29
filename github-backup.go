@@ -21,6 +21,7 @@ var (
 	accessToken = flag.String("token", "", "The OAuth access token.")
 	backupDir   = flag.String("to", ".", "The base directory for repository backups.")
 	verbose     = flag.Bool("verbose", false, "Be verbose.")
+	showVersion = flag.Bool("version", false, "Print version and exit")
 	showHelp    = flag.Bool("help", false, "Print usage and exit")
 )
 
@@ -44,12 +45,20 @@ OPTIONS
 
 	-verbose
 	Be verbose: log results for each repository.
+
+	-version
+	Print version and exit.
 `
 
 	flag.Parse()
 
 	if *showHelp {
 		fmt.Print(usageMsg)
+		os.Exit(0)
+	}
+
+	if *showVersion {
+		fmt.Println(VERSION)
 		os.Exit(0)
 	}
 
