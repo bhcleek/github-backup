@@ -78,13 +78,123 @@ OPTIONS
 	}
 }
 
+func seedGitCredentials(user string, pass string) {
+	configCredential := exec.Command("git", "config", "--global", "credential.helper", "cache")
+	err := configCredential.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gitCredential := exec.Command("git", "credential", "approve")
+	gitCredential.Stdin = strings.NewReader(fmt.Sprintf("protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n", user, pass))
+	err = gitCredential.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func feedRepositoryQueue(client *github.Client, queue chan github.Repository, log chan string) {
+	defer close(queue)
+
+	opt := &github.RepositoryListOptions{}
+
+	for {
+		repos, resp, err := client.Repositories.List("", opt)
+
+		if err != nil {
+			log <- err.Error()
+			break
+		}
+
+		if opt.Page == 0 && len(repos) == 0 {
+			log <- "No user repositories available"
+			break
+		} else {
+			for _, repo := range repos {
+				queue <- repo
+			}
+			if resp.NextPage != 0 {
+				opt.Page = resp.NextPage
+			} else {
+				break
+			}
+		}
+	}
+
+	orgs, _, err := client.Organizations.List("", &github.ListOptions{})
+	if err != nil {
+		log <- err.Error()
+	}
+
+	for _, org := range orgs {
+		opt := &github.RepositoryListByOrgOptions{Type: "all"}
+
+		for {
+			repos, resp, err := client.Repositories.ListByOrg(*org.Login, opt)
+
+			if err != nil {
+				log <- err.Error()
+				break
+			}
+
+			if opt.Page == 0 && len(repos) == 0 {
+				log <- fmt.Sprintf("no %s repositories available", *org.Login)
+				break
+			} else {
+				for _, repo := range repos {
+					queue <- repo
+				}
+				if resp.NextPage != 0 {
+					opt.Page = resp.NextPage
+				} else {
+					break
+				}
+			}
+		}
+	}
+}
+
+func processQueue(queue chan github.Repository, verboseLog chan string, done chan int) {
+	wg := sync.WaitGroup{}
+
+	for repo := range queue {
+		wg.Add(1)
+		go func(repo github.Repository) {
+			remote, err := url.Parse(*repo.CloneURL)
+			if err != nil {
+				log.Println(*repo.Name, err)
+			} else {
+				verboseLog <- fmt.Sprintf("checking %s", remote.Path[1:])
+
+				mirrorPathSegments := make([]string, 0, 4)
+				mirrorPathSegments = append(mirrorPathSegments, *backupDir)
+				host := strings.Split(remote.Host, ":")[0] // strip off the port portion if it's there.
+				mirrorPathSegments = append(mirrorPathSegments, host)
+				mirrorPathSegments = append(mirrorPathSegments, strings.Split(remote.Path, "/")...)
+				mirrorPath := path.Join(mirrorPathSegments...)
+
+				mirror := backup.NewMirror(mirrorPath)
+				err = mirror.Backup(*remote)
+				if err != nil {
+					log.Println(remote.Path, err)
+				} else {
+					verboseLog <- fmt.Sprintf("%s complete", remote.Path[1:])
+				}
+			}
+			wg.Done()
+		}(repo)
+	}
+
+	wg.Wait()
+	done <- 1
+}
+
 func main() {
 	var (
 		err       error
 		token     *oauth.Token
 		transport *oauth.Transport
 		cache     oauth.Cache
-		wg        sync.WaitGroup
 	)
 
 	config := &oauth.Config{}
@@ -124,94 +234,33 @@ func main() {
 		log.Println("Retrieving information from GitHub using credentials of", *user.Login)
 	}
 
-	opt := &github.RepositoryListOptions{Type: "all"}
-	repos, _, err := client.Repositories.List("", opt)
+	seedGitCredentials(*user.Login, token.AccessToken)
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if len(repos) == 0 {
-		if *verbose {
-			log.Println("no user repositories available.")
-		}
-	}
-
-	orgs, _, err := client.Organizations.List("", &github.ListOptions{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, org := range orgs {
-		opt := &github.RepositoryListByOrgOptions{Type: "all"}
-		orgRepos, _, err := client.Repositories.ListByOrg(*org.Login, opt)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if len(orgRepos) == 0 {
-			if *verbose {
-				log.Println("no", *org.Login, "repositories available")
-			}
-		} else {
-			repos = append(repos, orgRepos...)
-		}
-	}
-
-	configCredential := exec.Command("git", "config", "--global", "credential.helper", "cache")
-	err = configCredential.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	gitCredential := exec.Command("git", "credential", "approve")
-	gitCredential.Stdin = strings.NewReader(fmt.Sprintf("protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n", *user.Login, token.AccessToken))
-	err = gitCredential.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, repo := range repos {
-		wg.Add(1)
-		go func(repo github.Repository) {
-			remote, err := url.Parse(*repo.CloneURL)
-			if err != nil {
-				log.Println(*repo.Name, err)
-			} else {
-				if *verbose {
-					log.Println("checking", remote.Path)
-				}
-				mirrorPathSegments := make([]string, 0, 4)
-				mirrorPathSegments = append(mirrorPathSegments, *backupDir)
-				host := strings.Split(remote.Host, ":")[0] // strip off the port portion if it's there.
-				mirrorPathSegments = append(mirrorPathSegments, host)
-				mirrorPathSegments = append(mirrorPathSegments, strings.Split(remote.Path, "/")...)
-				mirrorPath := path.Join(mirrorPathSegments...)
-
-				mirror := backup.NewMirror(mirrorPath)
-				err = mirror.Backup(*remote, *verbose)
-				if err != nil {
-					log.Println(remote.Path, err)
-				} else if *verbose {
-					log.Println(remote.Path, "complete")
-				}
-			}
-			wg.Done()
-		}(repo)
-	}
-
+	msgQueue := make(chan string)
+	queue := make(chan github.Repository)
 	done := make(chan int)
-	go func() {
-		wg.Wait()
-		done <- 1
-	}()
+
+	go func(verbose bool, c chan string) {
+		select {
+		case msg := <-c:
+			if verbose {
+				log.Println(msg)
+			}
+		}
+	}(*verbose, msgQueue)
+
+	go feedRepositoryQueue(client, queue, msgQueue)
+	go processQueue(queue, msgQueue, done)
 
 	for {
 		select {
 		case <-time.After(2 * time.Second):
 			if !*verbose {
 				os.Stderr.WriteString(".")
+			}
+		case msg := <-msgQueue:
+			if *verbose {
+				log.Println(msg)
 			}
 		case <-done:
 			return
