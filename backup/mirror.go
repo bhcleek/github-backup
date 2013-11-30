@@ -15,7 +15,7 @@ func NewMirror(path string) *Mirror {
 	return &Mirror{path}
 }
 
-func (b *Mirror) Backup(remote url.URL, verbose bool) error {
+func (b *Mirror) Backup(remote url.URL) error {
 	if b == nil {
 		return nil
 	}
@@ -28,9 +28,6 @@ func (b *Mirror) Backup(remote url.URL, verbose bool) error {
 		}
 
 		cloneCommand := exec.Command("git", "clone", "--mirror", remote.String(), b.path)
-		if verbose {
-			cloneCommand.Stderr = os.Stderr
-		}
 		err = cloneCommand.Run()
 		if err != nil {
 			return err
@@ -43,9 +40,6 @@ func (b *Mirror) Backup(remote url.URL, verbose bool) error {
 
 	fetchCommand := exec.Command("git", "fetch", "--prune", "origin")
 	fetchCommand.Dir = b.path
-	if verbose {
-		fetchCommand.Stderr = os.Stderr
-	}
 	err := fetchCommand.Run()
 	if err != nil {
 		return err
