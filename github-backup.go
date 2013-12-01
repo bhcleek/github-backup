@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+var VERSION = "dev" // set correctly by the linker (e.g. go build -ldflags "-X main.VERSION <semver>")
+
 var (
 	cacheFile   = flag.String("cache", "", "The access token cache file.")
 	accessToken = flag.String("token", "", "The OAuth access token.")
