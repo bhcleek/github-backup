@@ -1,11 +1,8 @@
 package main
 
 import (
-	"code.google.com/p/goauth2/oauth"
 	"flag"
 	"fmt"
-	"github.com/bhcleek/github-backup/backup"
-	"github.com/google/go-github/github"
 	"log"
 	"net/url"
 	"os"
@@ -14,6 +11,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"code.google.com/p/goauth2/oauth"
+	"github.com/bhcleek/github-backup/backup"
+	"github.com/google/go-github/github"
 )
 
 var VERSION = "dev" // set correctly by the linker (e.g. go build -ldflags "-X main.VERSION <semver>")
