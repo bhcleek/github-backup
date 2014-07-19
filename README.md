@@ -12,7 +12,7 @@ documentation for all flags can be seen with
 
 [Create an access token](https://help.github.com/articles/creating-an-access-token-for-command-line-use) for GitHub and then run
 
-    github-backup -token <ACCESS_TOKEN> -cache /path/to/cache/file -to /mirror/base/path
+    github-backup -token ACCESS_TOKEN -cache /path/to/cache/file -to /mirror/base/path
 
 ## use a cached token 
 
