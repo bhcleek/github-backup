@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
-	"github.com/bhcleek/github-backup/backup"
+	"github.com/bhcleek/github-backup"
 	"github.com/google/go-github/github"
 )
 
