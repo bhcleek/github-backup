@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
-	"github.com/bhcleek/github-backup"
 	"github.com/google/go-github/github"
 )
 
@@ -176,7 +175,7 @@ func processQueue(queue chan github.Repository, verboseLog chan string, done cha
 				mirrorPathSegments = append(mirrorPathSegments, strings.Split(remote.Path, "/")...)
 				mirrorPath := path.Join(mirrorPathSegments...)
 
-				mirror := backup.NewMirror(mirrorPath)
+				mirror := NewMirror(mirrorPath)
 				err = mirror.Backup(*remote)
 				if err != nil {
 					log.Println(remote.Path, err)
