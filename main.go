@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -14,17 +13,19 @@ import (
 
 	"code.google.com/p/goauth2/oauth"
 	"github.com/google/go-github/github"
+	"github.com/libgit2/git2go"
 )
 
 var VERSION = "dev" // set correctly by the linker (e.g. go build -ldflags "-X main.VERSION <semver>")
 
 var (
-	cacheFile   = flag.String("cache", "", "The access token cache file.")
-	accessToken = flag.String("token", "", "The OAuth access token.")
-	backupDir   = flag.String("to", ".", "The base directory for repository backups.")
-	verbose     = flag.Bool("verbose", false, "Be verbose.")
-	showVersion = flag.Bool("version", false, "Print version and exit")
-	showHelp    = flag.Bool("help", false, "Print usage and exit")
+	cacheFile           = flag.String("cache", "", "The access token cache file.")
+	accessToken         = flag.String("token", "", "The OAuth access token.")
+	backupDir           = flag.String("to", ".", "The base directory for repository backups.")
+	verbose             = flag.Bool("verbose", false, "Be verbose.")
+	showVersion         = flag.Bool("version", false, "Print version and exit")
+	showHelp            = flag.Bool("help", false, "Print usage and exit")
+	credentialsCallback git.CredentialsCallback
 )
 
 func init() {
@@ -77,21 +78,6 @@ OPTIONS
 		}
 
 		*backupDir = wd
-	}
-}
-
-func seedGitCredentials(user string, pass string) {
-	configCredential := exec.Command("git", "config", "--global", "credential.helper", "cache")
-	err := configCredential.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	gitCredential := exec.Command("git", "credential", "approve")
-	gitCredential.Stdin = strings.NewReader(fmt.Sprintf("protocol=https\nhost=github.com\nusername=%s\npassword=%s\n\n", user, pass))
-	err = gitCredential.Run()
-	if err != nil {
-		log.Fatal(err)
 	}
 }
 
@@ -175,8 +161,9 @@ func processQueue(queue chan github.Repository, verboseLog chan string, done cha
 				mirrorPathSegments = append(mirrorPathSegments, strings.Split(remote.Path, "/")...)
 				mirrorPath := path.Join(mirrorPathSegments...)
 
-				mirror := NewMirror(mirrorPath)
-				err = mirror.Backup(*remote)
+				mirror := NewMirror(mirrorPath, *remote, credentialsCallback)
+				err = mirror.Fetch()
+
 				if err != nil {
 					log.Println(remote.Path, err)
 				} else {
@@ -236,7 +223,11 @@ func main() {
 		log.Println("Retrieving information from GitHub using credentials of", *user.Login)
 	}
 
-	seedGitCredentials(*user.Login, token.AccessToken)
+	credentialsCallback = func(url string, username_from_url string, allowed_type git.CredType) (int, *git.Cred) {
+		log.Println(username_from_url)
+		i, c := git.NewCredUserpassPlaintext(*user.Login, token.AccessToken)
+		return i, &c
+	}
 
 	msgQueue := make(chan string)
 	queue := make(chan github.Repository)
